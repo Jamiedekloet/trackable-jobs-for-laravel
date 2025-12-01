@@ -19,4 +19,9 @@ return [
      | If null, it will not delete any models.
      */
     'prunable_after' => null,
+
+    /*
+     | Override this to use your own model.
+     */
+    'model' => Junges\TrackableJobs\Models\TrackedJob::class,
 ];
