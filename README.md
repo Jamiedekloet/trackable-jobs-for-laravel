@@ -89,6 +89,7 @@ return [
         'tracked_jobs' => 'tracked_jobs',
     ],
     'using_uuid' => false,
+    'tracking_context' => null,
 ];
 ```
 
@@ -210,6 +211,45 @@ class ProcessETollImportRow extends TrackableJob implements ShouldQueue
 ```
 
 With this annotation, PHPStan understands that `trackedJob()` returns `TrackableImportExport`, so no app-level wrapper trait is needed only for typing.
+
+## Multitenancy / custom tracking context
+
+When tracked-job rows must be created / resolved inside a specific connection context (for example tenant DB context), configure `tracking_context` once and keep jobs clean.
+
+```php
+<?php
+
+return [
+    // ...
+    'tracking_context' => static function (\Junges\TrackableJobs\TrackableJob $job, callable $callback): mixed {
+        // 1) If tenant is already bound, just execute.
+        if (function_exists('tenant') && tenant() !== null) {
+            return $callback();
+        }
+
+        // 2) Resolve tenant from job payload if available.
+        $tenantId = $job->tenantId ?? null;
+        $tenant = $job->tenant ?? null;
+
+        if ($tenant !== null && method_exists($tenant, 'execute')) {
+            return $tenant->execute($callback);
+        }
+
+        if ($tenantId !== null && class_exists(\App\Models\Tenant::class)) {
+            $resolvedTenant = \App\Models\Tenant::find($tenantId);
+
+            if ($resolvedTenant && method_exists($resolvedTenant, 'execute')) {
+                return $resolvedTenant->execute($callback);
+            }
+        }
+
+        // 3) Fallback to default behavior.
+        return $callback();
+    },
+];
+```
+
+All tracked-job create/find operations are wrapped by this resolver, so you do not need per-job `withTrackingContext()` overrides.
 
 ## Using UUIDs
 To use UUIDs with this package, the only additional configuration you need to do is change the `using_uuid` to `true`, in `config/trackable-jobs.php`.

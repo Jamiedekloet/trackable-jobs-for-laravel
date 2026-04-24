@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Context;
 use Junges\TrackableJobs\Enums\TrackedJobStatus;
+use Junges\TrackableJobs\Exceptions\TrackableJobsException;
 use Junges\TrackableJobs\Exceptions\UuidNotConfiguredException;
 use Junges\TrackableJobs\Models\TrackedJob;
 use Junges\TrackableJobs\Tests\Jobs\ContextAwareTestJob;
@@ -150,6 +151,43 @@ class TrackedJobTest extends TestCase
 
         $this->assertInstanceOf(TypedTrackedJob::class, $trackedJob);
         $this->assertSame($trackedJob->getKey(), $job->trackedJobKeyAfterSave());
+    }
+
+    public function test_default_tracking_context_is_unchanged_when_null(): void
+    {
+        config()->set('trackable-jobs.tracking_context', null);
+
+        $job = new TestJob();
+
+        $this->assertNotNull($job->trackedJobId);
+        $this->assertCount(1, TrackedJob::all());
+    }
+
+    public function test_tracking_context_resolver_wraps_create_and_find(): void
+    {
+        $invocations = 0;
+
+        config()->set('trackable-jobs.tracking_context', function ($job, callable $callback) use (&$invocations) {
+            $invocations++;
+
+            return $callback();
+        });
+
+        $job = new TestJob();
+        $this->assertSame(1, $invocations);
+
+        $job->trackedJob();
+        $this->assertSame(2, $invocations);
+    }
+
+    public function test_it_throws_when_tracking_context_config_is_not_callable(): void
+    {
+        config()->set('trackable-jobs.tracking_context', 'not-callable');
+
+        $this->expectException(TrackableJobsException::class);
+        $this->expectExceptionMessage('Invalid configuration for "trackable-jobs.tracking_context": expected callable|null.');
+
+        new TestJob();
     }
 
     public function test_it_throws_exception_if_finding_by_uuid(): void

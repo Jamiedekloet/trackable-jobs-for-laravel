@@ -5,6 +5,7 @@ namespace Junges\TrackableJobs;
 use Junges\TrackableJobs\Contracts\TrackableContract;
 use Junges\TrackableJobs\Contracts\TrackableJobContract;
 use Junges\TrackableJobs\Enums\TrackedJobStatus;
+use Junges\TrackableJobs\Exceptions\TrackableJobsException;
 use Junges\TrackableJobs\Jobs\Middleware\TrackedJobMiddleware;
 use Junges\TrackableJobs\Models\TrackedJob;
 use Throwable;
@@ -86,7 +87,19 @@ abstract class TrackableJob implements TrackableContract
 
     protected function withTrackingContext(callable $callback): mixed
     {
-        return $callback();
+        $resolver = config('trackable-jobs.tracking_context');
+
+        if ($resolver === null) {
+            return $callback();
+        }
+
+        if (! is_callable($resolver)) {
+            throw new TrackableJobsException(
+                'Invalid configuration for "trackable-jobs.tracking_context": expected callable|null.'
+            );
+        }
+
+        return $resolver($this, $callback);
     }
 
     /**
