@@ -15,6 +15,8 @@ use Junges\TrackableJobs\Tests\Jobs\FailingJob;
 use Junges\TrackableJobs\Tests\Jobs\RetryingJob;
 use Junges\TrackableJobs\Tests\Jobs\TestJob;
 use Junges\TrackableJobs\Tests\Jobs\TestJobWithoutModel;
+use Junges\TrackableJobs\Tests\Jobs\TypedTrackedModelJob;
+use Junges\TrackableJobs\Tests\Models\TypedTrackedJob;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\TestTime\TestTime;
 
@@ -137,6 +139,17 @@ class TrackedJobTest extends TestCase
             $trackedJobId,
             TrackedJob::firstOrFail()->output['trackable_job_id']
         );
+    }
+
+    public function test_it_supports_typed_tracked_job_models(): void
+    {
+        config()->set('trackable-jobs.model', TypedTrackedJob::class);
+
+        $job = new TypedTrackedModelJob();
+        $trackedJob = $job->trackedJob();
+
+        $this->assertInstanceOf(TypedTrackedJob::class, $trackedJob);
+        $this->assertSame($trackedJob->getKey(), $job->trackedJobKeyAfterSave());
     }
 
     public function test_it_throws_exception_if_finding_by_uuid(): void

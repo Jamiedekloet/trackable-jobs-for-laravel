@@ -183,6 +183,34 @@ class AppServiceProvider extends ServiceProvider
 }
 ```
 
+### Static typing for custom tracked models (PHPStan)
+
+When your job uses a custom tracked-job model, you can declare the concrete type with PHPDoc generics:
+
+```php
+<?php
+
+namespace App\Jobs\Documents;
+
+use App\Models\TrackableImportExport;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Junges\TrackableJobs\TrackableJob;
+
+/** @extends TrackableJob<TrackableImportExport> */
+class ProcessETollImportRow extends TrackableJob implements ShouldQueue
+{
+    public function handle(): void
+    {
+        $trackedJobId = $this->trackedJob()->getKey();
+
+        $this->trackedJob()->setOutput(['foo' => 'bar']);
+        $this->trackedJob()->save();
+    }
+}
+```
+
+With this annotation, PHPStan understands that `trackedJob()` returns `TrackableImportExport`, so no app-level wrapper trait is needed only for typing.
+
 ## Using UUIDs
 To use UUIDs with this package, the only additional configuration you need to do is change the `using_uuid` to `true`, in `config/trackable-jobs.php`.
 Then it will automatically start using UUID's to store the tracked jobs and, if the model related to the tracked job

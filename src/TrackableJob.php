@@ -9,6 +9,10 @@ use Junges\TrackableJobs\Jobs\Middleware\TrackedJobMiddleware;
 use Junges\TrackableJobs\Models\TrackedJob;
 use Throwable;
 
+/**
+ * @template TTrackedJob of \Junges\TrackableJobs\Contracts\TrackableJobContract
+ * @property-read TTrackedJob $trackedJob
+ */
 abstract class TrackableJob implements TrackableContract
 {
     public string|int|null $trackedJobId = null;
@@ -54,6 +58,9 @@ abstract class TrackableJob implements TrackableContract
         return [new TrackedJobMiddleware()];
     }
 
+    /**
+     * @return TTrackedJob
+     */
     public function trackedJob(): TrackableJobContract
     {
         return $this->ensureTrackedJobExists();
@@ -66,10 +73,12 @@ abstract class TrackableJob implements TrackableContract
         $this->trackedJob()->markAsFailed($message);
     }
 
-    /** @return class-string<TrackableJobContract> */
+    /**
+     * @return class-string<TTrackedJob>
+     */
     protected function trackedJobModel(): string
     {
-        /** @var class-string<TrackableJobContract> $trackedJobModel */
+        /** @var class-string<TTrackedJob> $trackedJobModel */
         $trackedJobModel = config('trackable-jobs.model', TrackedJob::class);
 
         return $trackedJobModel;
@@ -80,6 +89,9 @@ abstract class TrackableJob implements TrackableContract
         return $callback();
     }
 
+    /**
+     * @return TTrackedJob
+     */
     protected function ensureTrackedJobExists(): TrackableJobContract
     {
         if ($this->trackedJobId !== null) {

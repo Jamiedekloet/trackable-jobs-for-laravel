@@ -4,6 +4,7 @@ All relevant changes in `mateusjunges/laravel-trackable-jobs` will be documented
 
 ### [Unreleased]
 - Add support for Laravel 13.
+- Add generic PHPDoc typing to `TrackableJob` so consumers can declare concrete tracked-job models (e.g. `@extends TrackableJob<MyTrackedModel>`).
 
 ### [v2.2.0 (2025-08-29)](https://github.com/mateusjunges/trackable-jobs-for-laravel/compare/v2.1.2...v2.2.0)
 - Tracks queue where the job has been queued by [@mateusjunges](https://github.com/mateusjunges) in [#65](https://github.com/mateusjunges/trackable-jobs-for-laravel/pull/65)
