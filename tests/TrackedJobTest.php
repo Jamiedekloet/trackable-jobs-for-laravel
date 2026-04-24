@@ -6,9 +6,11 @@ use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Context;
 use Junges\TrackableJobs\Enums\TrackedJobStatus;
 use Junges\TrackableJobs\Exceptions\UuidNotConfiguredException;
 use Junges\TrackableJobs\Models\TrackedJob;
+use Junges\TrackableJobs\Tests\Jobs\ContextAwareTestJob;
 use Junges\TrackableJobs\Tests\Jobs\FailingJob;
 use Junges\TrackableJobs\Tests\Jobs\RetryingJob;
 use Junges\TrackableJobs\Tests\Jobs\TestJob;
@@ -117,6 +119,24 @@ class TrackedJobTest extends TestCase
         $this->expectExceptionMessage('No query results for model [Junges\\TrackableJobs\\Models\\TrackedJob]');
 
         $restoredJob->trackedJob();
+    }
+
+    public function test_it_adds_trackable_job_id_to_context_and_restores_context_after_execution(): void
+    {
+        Context::add('trackable_job_id', 'outer');
+
+        $job = new ContextAwareTestJob();
+        $trackedJobId = $job->trackedJobId;
+
+        app(Dispatcher::class)->dispatch($job);
+
+        $this->artisan('queue:work --once')->assertExitCode(0);
+
+        $this->assertSame('outer', Context::get('trackable_job_id'));
+        $this->assertEquals(
+            $trackedJobId,
+            TrackedJob::firstOrFail()->output['trackable_job_id']
+        );
     }
 
     public function test_it_throws_exception_if_finding_by_uuid(): void
