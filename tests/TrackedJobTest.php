@@ -3,6 +3,7 @@
 namespace Junges\TrackableJobs\Tests;
 
 use Illuminate\Contracts\Bus\Dispatcher;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Junges\TrackableJobs\Enums\TrackedJobStatus;
@@ -63,6 +64,7 @@ class TrackedJobTest extends TestCase
     public function test_it_creates_the_job_with_the_correct_defaults(): void
     {
         $job = new TestJob();
+        $job->trackedJob();
 
         $this->assertDatabaseHas(TrackedJob::class, [
             'status' => TrackedJobStatus::Created,
@@ -71,6 +73,50 @@ class TrackedJobTest extends TestCase
             'trackable_type' => null,
             'trackable_id' => null,
         ]);
+    }
+
+    public function test_it_does_not_serialize_tracked_job_model_into_payload(): void
+    {
+        $job = new TestJob();
+
+        $serializedJob = serialize($job);
+
+        $this->assertStringNotContainsString(
+            'Junges\\TrackableJobs\\Models\\TrackedJob',
+            $serializedJob
+        );
+    }
+
+    public function test_it_does_not_fail_during_unserialize_when_tracked_job_row_is_missing(): void
+    {
+        $job = new TestJob();
+        $job->trackedJob();
+        $trackedJobId = $job->trackedJobId;
+        $serializedJob = serialize($job);
+
+        TrackedJob::query()->findOrFail($trackedJobId)->delete();
+
+        $restoredJob = unserialize($serializedJob);
+
+        $this->assertInstanceOf(TestJob::class, $restoredJob);
+        $this->assertSame($trackedJobId, $restoredJob->trackedJobId);
+    }
+
+    public function test_it_throws_model_not_found_only_when_tracked_job_is_explicitly_resolved(): void
+    {
+        $job = new TestJob();
+        $job->trackedJob();
+        $trackedJobId = $job->trackedJobId;
+        $serializedJob = serialize($job);
+
+        TrackedJob::query()->findOrFail($trackedJobId)->delete();
+
+        $restoredJob = unserialize($serializedJob);
+
+        $this->expectException(ModelNotFoundException::class);
+        $this->expectExceptionMessage('No query results for model [Junges\\TrackableJobs\\Models\\TrackedJob]');
+
+        $restoredJob->trackedJob();
     }
 
     public function test_it_throws_exception_if_finding_by_uuid(): void
