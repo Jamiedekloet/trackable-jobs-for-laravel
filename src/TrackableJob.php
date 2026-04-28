@@ -8,6 +8,7 @@ use Junges\TrackableJobs\Enums\TrackedJobStatus;
 use Junges\TrackableJobs\Exceptions\TrackableJobsException;
 use Junges\TrackableJobs\Jobs\Middleware\TrackedJobMiddleware;
 use Junges\TrackableJobs\Models\TrackedJob;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Throwable;
 
 /**
@@ -108,12 +109,26 @@ abstract class TrackableJob implements TrackableContract
     protected function ensureTrackedJobExists(): TrackableJobContract
     {
         if ($this->trackedJobId !== null) {
-            $trackedJob = $this->withTrackingContext(
-                fn () => $this->trackedJobModel()::query()->findOrFail($this->trackedJobId)
-            );
-            assert($trackedJob instanceof TrackableJobContract);
+            $backoffMicroseconds = [25_000, 50_000, 100_000];
+            $firstException = null;
 
-            return $trackedJob;
+            for ($attempt = 0; $attempt < count($backoffMicroseconds); $attempt++) {
+                try {
+                    $trackedJob = $this->withTrackingContext(
+                        fn () => $this->trackedJobModel()::query()->useWritePdo()->findOrFail($this->trackedJobId)
+                    );
+                    assert($trackedJob instanceof TrackableJobContract);
+
+                    return $trackedJob;
+                } catch (ModelNotFoundException $exception) {
+                    $firstException ??= $exception;
+                    usleep($backoffMicroseconds[$attempt]);
+                }
+            }
+
+            assert($firstException instanceof ModelNotFoundException);
+
+            throw $firstException;
         }
 
         $trackedJob = $this->withTrackingContext(fn () => $this->trackedJobModel()::create([

@@ -18,6 +18,8 @@ use Junges\TrackableJobs\Tests\Jobs\TestJob;
 use Junges\TrackableJobs\Tests\Jobs\TestJobWithoutModel;
 use Junges\TrackableJobs\Tests\Jobs\TypedTrackedModelJob;
 use Junges\TrackableJobs\Tests\Models\TypedTrackedJob;
+use Junges\TrackableJobs\Tests\Support\Fakes\RetryingWriterAwareTrackedJobFake;
+use Junges\TrackableJobs\Tests\Support\Fakes\WriterAwareTrackedJobFake;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\TestTime\TestTime;
 
@@ -188,6 +190,85 @@ class TrackedJobTest extends TestCase
         $this->expectExceptionMessage('Invalid configuration for "trackable-jobs.tracking_context": expected callable|null.');
 
         new TestJob();
+    }
+
+    public function test_it_uses_write_pdo_when_resolving_existing_tracked_job_id(): void
+    {
+        WriterAwareTrackedJobFake::$lastBuilder = null;
+
+        $job = new class extends \Junges\TrackableJobs\TrackableJob {
+            public function __construct()
+            {
+            }
+
+            protected function trackedJobModel(): string
+            {
+                return WriterAwareTrackedJobFake::class;
+            }
+        };
+
+        $job->trackedJobId = 'tracked-job-uuid';
+        $job->trackedJob();
+
+        $builder = WriterAwareTrackedJobFake::$lastBuilder;
+        $this->assertNotNull($builder);
+        $this->assertTrue($builder->useWritePdoCalled);
+        $this->assertSame('tracked-job-uuid', $builder->lastFindOrFailId);
+    }
+
+    public function test_it_retries_when_existing_tracked_job_is_temporarily_not_visible(): void
+    {
+        RetryingWriterAwareTrackedJobFake::$lastBuilder = null;
+        RetryingWriterAwareTrackedJobFake::$failuresBeforeSuccess = 2;
+
+        $job = new class extends \Junges\TrackableJobs\TrackableJob {
+            public function __construct()
+            {
+            }
+
+            protected function trackedJobModel(): string
+            {
+                return RetryingWriterAwareTrackedJobFake::class;
+            }
+        };
+
+        $job->trackedJobId = 'tracked-job-uuid';
+        $job->trackedJob();
+
+        $builder = RetryingWriterAwareTrackedJobFake::$lastBuilder;
+        $this->assertNotNull($builder);
+        $this->assertTrue($builder->useWritePdoCalled);
+        $this->assertSame(3, $builder->findOrFailCalls);
+    }
+
+    public function test_it_throws_original_exception_when_existing_tracked_job_stays_missing_after_retries(): void
+    {
+        RetryingWriterAwareTrackedJobFake::$lastBuilder = null;
+        RetryingWriterAwareTrackedJobFake::$failuresBeforeSuccess = 99;
+
+        $job = new class extends \Junges\TrackableJobs\TrackableJob {
+            public function __construct()
+            {
+            }
+
+            protected function trackedJobModel(): string
+            {
+                return RetryingWriterAwareTrackedJobFake::class;
+            }
+        };
+
+        $job->trackedJobId = 'tracked-job-uuid';
+
+        try {
+            $job->trackedJob();
+            $this->fail('Expected ModelNotFoundException was not thrown.');
+        } catch (ModelNotFoundException $exception) {
+            $builder = RetryingWriterAwareTrackedJobFake::$lastBuilder;
+            $this->assertNotNull($builder);
+            $this->assertTrue($builder->useWritePdoCalled);
+            $this->assertSame(3, $builder->findOrFailCalls);
+            $this->assertStringContainsString(RetryingWriterAwareTrackedJobFake::class, $exception->getMessage());
+        }
     }
 
     public function test_it_throws_exception_if_finding_by_uuid(): void
